@@ -1,7 +1,9 @@
 const std = @import("std");
 const polygon_renderer = @import("polygon_renderer");
-
+var prng = std.Random.DefaultPrng.init(0);
 const Color = struct { r: u8, g: u8, b: u8 };
+//const rand = prng.random();
+//const j = rand.intRangeLessThan(usize, 0, i);
 
 fn TGAFrameBuffer(comptime width: usize, comptime height: usize) type {
     return struct {
@@ -14,7 +16,7 @@ fn TGAFrameBuffer(comptime width: usize, comptime height: usize) type {
         }
 
         fn set(self: *Self, x: usize, raw_y: usize, color: Color) void {
-            const y = height - raw_y;
+            const y = (height - 1) - raw_y;
             self.pixels[(y * width + x) * 3 + 0] = color.b;
             self.pixels[(y * width + x) * 3 + 1] = color.g;
             self.pixels[(y * width + x) * 3 + 2] = color.r;
@@ -45,41 +47,195 @@ const green = Color{ .r = 0, .b = 0, .g = 255 };
 const red = Color{ .r = 255, .b = 0, .g = 0 };
 const yellow = Color{ .r = 255, .b = 0, .g = 255 };
 
-fn line(ax: usize, ay: usize, bx: usize, by: usize, frameBuffer: anytype, color: Color) void {
-    var t: f32 = 0.0;
-    const dx: f32 = @floatFromInt(@as(i32, @intCast(bx)) - @as(i32, @intCast(ax)));
-    const dy: f32 = @floatFromInt(@as(i32, @intCast(by)) - @as(i32, @intCast(ay)));
-    while (t < 1.0) {
-        const x: usize = @intFromFloat(@round(@as(f32, @floatFromInt(ax)) + dx * t));
-        const y: usize = @intFromFloat(@round(@as(f32, @floatFromInt(ay)) + dy * t));
-        t += 0.02;
-        frameBuffer.set(x, y, color);
-    }
+fn swap(comptime T: type, a: *T, b: *T) void {
+    const tmp = a.*;
+    a.* = b.*;
+    b.* = tmp;
 }
 
+//fn line(ax: usize, ay: usize, bx: usize, by: usize, frameBuffer: anytype, color: Color) void {
+//    var t: f32 = 0.0;
+//    const dx: f32 = @floatFromInt(@as(i32, @intCast(bx)) - @as(i32, @intCast(ax)));
+//    const dy: f32 = @floatFromInt(@as(i32, @intCast(by)) - @as(i32, @intCast(ay)));
+//    while (t < 1.0) {
+//        const x: usize = @intFromFloat(@round(@as(f32, @floatFromInt(ax)) + dx * t));
+//        const y: usize = @intFromFloat(@round(@as(f32, @floatFromInt(ay)) + dy * t));
+//        t += 0.02;
+//        frameBuffer.set(x, y, color);
+//    }
+//}
+
+//fn line(ax: usize, ay: usize, bx: usize, by: usize, frameBuffer: anytype, color: Color) void {
+//    var x = ax;
+//    while (x <= bx) {
+//        const t: f32 = @as(f32, @floatFromInt(x - ax)) / @as(f32, @floatFromInt(bx - ax));
+//        const y: usize = @intFromFloat(@round(@as(f32, @floatFromInt(ay)) + @as(f32, @floatFromInt(by - ay)) * t));
+//        frameBuffer.set(x, y, color);
+//        x += 1;
+//    }
+//}
+
+//fn line(_ax: usize, _ay: usize, _bx: usize, _by: usize, frameBuffer: anytype, color: Color) void {
+//
+//    var ax = _ax;
+//    var ay = _ay;
+//    var bx = _bx;
+//    var by = _by;
+//
+//    if (ax > bx) {
+//        swap(usize, &ax, &bx);
+//        swap(usize, &ay, &by);
+//    }
+//    var x = ax;
+//    while (x <= bx) {
+//        const t: f32 = @as(f32, @floatFromInt(x - ax)) / @as(f32, @floatFromInt(bx - ax));
+//        const y: usize = @intFromFloat(@round(@as(f32, @floatFromInt(ay)) + @as(f32, @floatFromInt(by - ay)) * t));
+//        frameBuffer.set(x, y, color);
+//        x += 1;
+//    }
+//}
+
+//fn line(_ax: usize, _ay: usize, _bx: usize, _by: usize, frameBuffer: anytype, color: Color) void {
+//    var ax: i32 = @intCast(_ax);
+//    var ay: i32 = @intCast(_ay);
+//    var bx: i32 = @intCast(_bx);
+//    var by: i32 = @intCast(_by);
+//
+//    if (ax == bx and ay == by) {
+//        frameBuffer.set(_ax, _ay, color);
+//        return;
+//    }
+//
+//    const steep = @abs(ax - bx) < @abs(ay - by);
+//
+//    if (steep) {
+//        swap(i32, &ax, &ay);
+//        swap(i32, &bx, &by);
+//    }
+//
+//    if (ax > bx) {
+//        swap(i32, &ax, &bx);
+//        swap(i32, &ay, &by);
+//    }
+//    var x = ax;
+//    var y: f32 = @floatFromInt(ay);
+//    while (x <= bx) {
+//
+//        //const y: usize = @intFromFloat(@round(@as(f32, @floatFromInt(ay)) + @as(f32, @floatFromInt(by - ay)) * t));
+//        if (steep) {
+//            frameBuffer.set(@intFromFloat(y), @intCast(x), color);
+//        } else {
+//            frameBuffer.set(@intCast(x), @intFromFloat(y), color);
+//        }
+//        x += 1;
+//        y += @as(f32, @floatFromInt(by - ay)) / @as(f32, @floatFromInt(bx - ax));
+//    }
+//}
+
+//fn line(_ax: usize, _ay: usize, _bx: usize, _by: usize, frameBuffer: anytype, color: Color) void {
+//    var ax: i32 = @intCast(_ax);
+//    var ay: i32 = @intCast(_ay);
+//    var bx: i32 = @intCast(_bx);
+//    var by: i32 = @intCast(_by);
+//
+//    if (ax == bx and ay == by) {
+//        frameBuffer.set(_ax, _ay, color);
+//        return;
+//    }
+//
+//    const steep = @abs(ax - bx) < @abs(ay - by);
+//
+//    if (steep) {
+//        swap(i32, &ax, &ay);
+//        swap(i32, &bx, &by);
+//    }
+//
+//    if (ax > bx) {
+//        swap(i32, &ax, &bx);
+//        swap(i32, &ay, &by);
+//    }
+//    var x = ax;
+//    var y: i32 = ay;
+//    var errorF: f32 = 0.0;
+//    while (x <= bx) {
+//
+//        //const y: usize = @intFromFloat(@round(@as(f32, @floatFromInt(ay)) + @as(f32, @floatFromInt(by - ay)) * t));
+//        if (steep) {
+//            frameBuffer.set(@intCast(y), @intCast(x), color);
+//        } else {
+//            frameBuffer.set(@intCast(x), @intCast(y), color);
+//        }
+//        errorF += @as(f32, @floatFromInt(by - ay)) / @as(f32, @floatFromInt(bx - ax));
+//        if (errorF > 0.5) {
+//            if (by > ay) {
+//                y += 1;
+//            } else {
+//                y += -1;
+//            }
+//        }
+//        x += 1;
+//    }
+//}
+
+fn line(_ax: usize, _ay: usize, _bx: usize, _by: usize, frameBuffer: anytype, color: Color) void {
+    var ax: i32 = @intCast(_ax);
+    var ay: i32 = @intCast(_ay);
+    var bx: i32 = @intCast(_bx);
+    var by: i32 = @intCast(_by);
+
+    if (ax == bx and ay == by) {
+        frameBuffer.set(_ax, _ay, color);
+        return;
+    }
+
+    const steep = @abs(ax - bx) < @abs(ay - by);
+
+    if (steep) {
+        swap(i32, &ax, &ay);
+        swap(i32, &bx, &by);
+    }
+
+    if (ax > bx) {
+        swap(i32, &ax, &bx);
+        swap(i32, &ay, &by);
+    }
+    var x = ax;
+    var y: i32 = ay;
+    var errorI: i32 = 0;
+    while (x <= bx) {
+        if (steep) {
+            frameBuffer.set(@intCast(y), @intCast(x), color);
+        } else {
+            frameBuffer.set(@intCast(x), @intCast(y), color);
+        }
+        errorI += 2 * @as(i32, @intCast(@abs(by - ay)));
+        if (errorI > bx - ax) {
+            if (by > ay) {
+                y += 1;
+            } else {
+                y += -1;
+            }
+            errorI -= 2 * (bx - ax);
+        }
+        x += 1;
+    }
+}
 pub fn main() !void {
     const width = 64;
     const height = 64;
 
     var tgaFrameBuffer = TGAFrameBuffer(width, height).init();
 
-    const ax = 7;
-    const ay = 3;
-
-    const bx = 12;
-    const by = 37;
-
-    const cx = 62;
-    const cy = 53;
-
-    line(ax, ay, bx, by, &tgaFrameBuffer, blue);
-    line(cx, cy, bx, by, &tgaFrameBuffer, green);
-    line(cx, cy, ax, ay, &tgaFrameBuffer, yellow);
-    line(ax, ay, cx, cy, &tgaFrameBuffer, red);
-
-    tgaFrameBuffer.set(ax, ay, white);
-    tgaFrameBuffer.set(bx, by, white);
-    tgaFrameBuffer.set(cx, cy, white);
-
+    var i: usize = 0;
+    const rand = prng.random();
+    while (i < (1 << 24)) {
+        const ax = rand.intRangeLessThan(usize, 0, width);
+        const ay = rand.intRangeLessThan(usize, 0, height);
+        const bx = rand.intRangeLessThan(usize, 0, width);
+        const by = rand.intRangeLessThan(usize, 0, height);
+        const color = Color{ .r = rand.intRangeAtMost(u8, 0, 255), .b = rand.intRangeAtMost(u8, 0, 255), .g = rand.intRangeAtMost(u8, 0, 255) };
+        line(ax, ay, bx, by, &tgaFrameBuffer, color);
+        i += 1;
+    }
     _ = try tgaFrameBuffer.save("test.tga");
 }
