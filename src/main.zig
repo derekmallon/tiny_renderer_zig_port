@@ -15,9 +15,9 @@ fn TGAFrameBuffer(comptime width: usize, comptime height: usize) type {
 
         fn set(self: *Self, x: usize, raw_y: usize, color: Color) void {
             const y = height - raw_y;
-            self.pixels[(y * width + x) * 3 + 0] = color.r;
+            self.pixels[(y * width + x) * 3 + 0] = color.b;
             self.pixels[(y * width + x) * 3 + 1] = color.g;
-            self.pixels[(y * width + x) * 3 + 2] = color.b;
+            self.pixels[(y * width + x) * 3 + 2] = color.r;
         }
 
         fn save(self: *const Self, filePath: []const u8) !void {
@@ -40,6 +40,22 @@ fn TGAFrameBuffer(comptime width: usize, comptime height: usize) type {
 }
 
 const white = Color{ .r = 255, .b = 255, .g = 255 };
+const blue = Color{ .r = 0, .b = 255, .g = 0 };
+const green = Color{ .r = 0, .b = 0, .g = 255 };
+const red = Color{ .r = 255, .b = 0, .g = 0 };
+const yellow = Color{ .r = 255, .b = 0, .g = 255 };
+
+fn line(ax: usize, ay: usize, bx: usize, by: usize, frameBuffer: anytype, color: Color) void {
+    var t: f32 = 0.0;
+    const dx: f32 = @floatFromInt(@as(i32, @intCast(bx)) - @as(i32, @intCast(ax)));
+    const dy: f32 = @floatFromInt(@as(i32, @intCast(by)) - @as(i32, @intCast(ay)));
+    while (t < 1.0) {
+        const x: usize = @intFromFloat(@round(@as(f32, @floatFromInt(ax)) + dx * t));
+        const y: usize = @intFromFloat(@round(@as(f32, @floatFromInt(ay)) + dy * t));
+        t += 0.02;
+        frameBuffer.set(x, y, color);
+    }
+}
 
 pub fn main() !void {
     const width = 64;
@@ -55,6 +71,11 @@ pub fn main() !void {
 
     const cx = 62;
     const cy = 53;
+
+    line(ax, ay, bx, by, &tgaFrameBuffer, blue);
+    line(cx, cy, bx, by, &tgaFrameBuffer, green);
+    line(cx, cy, ax, ay, &tgaFrameBuffer, yellow);
+    line(ax, ay, cx, cy, &tgaFrameBuffer, red);
 
     tgaFrameBuffer.set(ax, ay, white);
     tgaFrameBuffer.set(bx, by, white);
