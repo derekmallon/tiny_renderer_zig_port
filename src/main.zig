@@ -16,6 +16,7 @@ fn TGAFrameBuffer(comptime width: usize, comptime height: usize) type {
         }
 
         fn set(self: *Self, x: usize, raw_y: usize, color: Color) void {
+            std.debug.print("raw_y {d}\n", .{raw_y});
             const y = (height - 1) - raw_y;
             self.pixels[(y * width + x) * 3 + 0] = color.b;
             self.pixels[(y * width + x) * 3 + 1] = color.g;
@@ -220,7 +221,8 @@ fn line(_ax: usize, _ay: usize, _bx: usize, _by: usize, frameBuffer: anytype, co
 //    }
 //}
 
-const vertex = struct { x: f32, y: f32, z: f32, w: f32 };
+const Vertex = struct { x: f32, y: f32, z: f32, w: f32 };
+const Triangle = struct { verts: [3]Vertex };
 
 fn writeTillEndOfDelimiter(reader: *std.Io.Reader, writer: *std.Io.Writer, delimiter: u8) !void {
     _ = try reader.streamDelimiter(writer, delimiter);
@@ -238,10 +240,7 @@ fn writeTillEndOfDelimiter(reader: *std.Io.Reader, writer: *std.Io.Writer, delim
     }
 }
 
-fn readObjFile() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+fn readObjFile(allocator: std.mem.Allocator) !std.array_list.Managed(Triangle) {
     const filename = "diablo3_pose.obj";
     var file = try std.fs.cwd().openFile(filename, .{ .mode = .read_only });
     defer file.close();
@@ -252,6 +251,9 @@ fn readObjFile() !void {
     defer array_list_writer.deinit();
     var float_writer = std.Io.Writer.Allocating.init(allocator);
     defer float_writer.deinit();
+    var vertex_list = std.array_list.Managed(Vertex).init(allocator);
+    defer vertex_list.deinit();
+    var triangles = std.array_list.Managed(Triangle).init(allocator);
 
     while (reader.streamDelimiter(&array_list_writer.writer, '\n')) |_| {
         reader.toss(1);
@@ -259,7 +261,7 @@ fn readObjFile() !void {
         var readerObjLine = std.Io.Reader.fixed(objLine);
         if (objLine.len > 1) {
             if (objLine[0] == 'v' and objLine[1] == ' ') {
-                var v: vertex = undefined;
+                var v: Vertex = undefined;
 
                 try writeTillEndOfDelimiter(&readerObjLine, &float_writer.writer, ' ');
                 float_writer.clearRetainingCapacity();
@@ -277,6 +279,24 @@ fn readObjFile() !void {
                 float_writer.clearRetainingCapacity();
 
                 std.debug.print("{d} {d} {d}\n", .{ v.x, v.y, v.z });
+                try vertex_list.append(v);
+            } else if (objLine[0] == 'f' and objLine[1] == ' ') {
+                const trimmedLine = std.mem.trim(u8, objLine, "f ");
+                var vertex_it = std.mem.splitScalar(u8, trimmedLine, ' ');
+                var vertex = vertex_it.next();
+                var index_counter: usize = 0;
+                var triangle: Triangle = undefined;
+                while (vertex != null) {
+                    const vertex_string = vertex orelse "";
+                    var component_it = std.mem.splitScalar(u8, vertex_string, '/');
+                    const vertex_index_string = component_it.next() orelse "";
+                    const vertex_index: usize = try std.fmt.parseInt(usize, vertex_index_string, 10);
+                    triangle.verts[index_counter] = vertex_list.items[vertex_index - 1];
+                    vertex = vertex_it.next();
+                    index_counter += 1;
+                }
+
+                try triangles.append(triangle);
             }
         }
         array_list_writer.clearRetainingCapacity();
@@ -286,25 +306,39 @@ fn readObjFile() !void {
         => |e| return e,
         else => {},
     }
+
+    return triangles;
+}
+
+fn maxFloat(a: f32, b: f32) f32 {
+    if (a > b) return a;
+    return b;
 }
 
 pub fn main() !void {
-    //   const width = 64;
-    //  const height = 64;
+    const width = 64;
+    const height = 64;
 
-    //    var tgaFrameBuffer = TGAFrameBuffer(width, height).init();
-    try readObjFile();
+    var tgaFrameBuffer = TGAFrameBuffer(width, height).init();
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    const triangles = try readObjFile(allocator);
+    defer triangles.deinit();
 
-    //    var i: usize = 0;
-    //    const rand = prng.random();
-    //    while (i < (1 << 24)) {
-    //        const ax = rand.intRangeLessThan(usize, 0, width);
-    //        const ay = rand.intRangeLessThan(usize, 0, height);
-    //        const bx = rand.intRangeLessThan(usize, 0, width);
-    //        const by = rand.intRangeLessThan(usize, 0, height);
-    //        const color = Color{ .r = rand.intRangeAtMost(u8, 0, 255), .b = rand.intRangeAtMost(u8, 0, 255), .g = rand.intRangeAtMost(u8, 0, 255) };
-    //        line(ax, ay, bx, by, &tgaFrameBuffer, color);
-    //        i += 1;
-    //    }
-    //    _ = try tgaFrameBuffer.save("test.tga");
+    for (triangles.items) |triangle| {
+        for (triangle.verts, 0..) |_, i| {
+            const vert_a_index = if (i == 0) 2 else i - 1;
+            const vert_a = triangle.verts[vert_a_index];
+            const vert_b = triangle.verts[i];
+            const ax: usize = @intFromFloat(maxFloat(vert_a.x, 0.0) * width);
+            const ay: usize = @intFromFloat(maxFloat(vert_a.y, 0.0) * height);
+            const bx: usize = @intFromFloat(maxFloat(vert_b.x, 0.0) * width);
+            const by: usize = @intFromFloat(maxFloat(vert_b.y, 0.0) * height);
+            std.debug.print("{d}\n", .{ay});
+            line(ax, ay, bx, by, &tgaFrameBuffer, red);
+        }
+    }
+
+    _ = try tgaFrameBuffer.save("test.tga");
 }
